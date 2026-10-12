@@ -148,6 +148,8 @@ class SessionDetailViewModel(private val year: Int, private val path: String) : 
     val telemetry: StateFlow<TelemetryUi> = _telemetry
     val radio = RadioPlayer()
     private var telemetryJob: Job? = null
+    private val _circuit = MutableStateFlow<com.rhazenz0.f1info.data.timing.TrackOutline?>(null)
+    val circuit: StateFlow<com.rhazenz0.f1info.data.timing.TrackOutline?> = _circuit
 
     init { load() }
 
@@ -159,6 +161,9 @@ class SessionDetailViewModel(private val year: Int, private val path: String) : 
                 val loaded = AppGraph.loadSession(ref, force) { msg -> _state.value = Loadable.Progress(msg) }
                 _state.value = Loadable.Ready(loaded)
                 AppGraph.cachedTelemetry(ref)?.let { _telemetry.value = TelemetryUi.Ready(it) }
+                ref.circuitKey?.let { key ->
+                    launch { _circuit.value = runCatching { AppGraph.circuits.outline(key, ref.year) }.getOrNull() }
+                }
             } catch (e: Exception) {
                 _state.value = Loadable.Error(e.userMessage())
             }
@@ -195,6 +200,7 @@ fun SessionDetailScreen(
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
+    val circuit by vm.circuit.collectAsStateWithLifecycle()
     DisposableEffect(Unit) { onDispose { vm.radio.stop() } }
     val ref = (state as? Loadable.Ready)?.value?.ref
 
@@ -220,6 +226,7 @@ fun SessionDetailScreen(
                 snapshot = loaded.snapshot,
                 isLive = false,
                 radio = vm.radio,
+                trackTab = { ReplayTrackTab(loaded.snapshot, telemetry, circuit, vm::loadTelemetry) },
                 telemetryTab = { ArchiveTelemetryTab(loaded.snapshot, telemetry, vm::loadTelemetry) },
             )
         }

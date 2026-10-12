@@ -17,6 +17,7 @@ import com.rhazenz0.f1info.data.timing.LoadedSession
 import com.rhazenz0.f1info.data.timing.SessionRef
 import com.rhazenz0.f1info.data.timing.TelemetryData
 import com.rhazenz0.f1info.ui.session.ArchiveTelemetryTab
+import com.rhazenz0.f1info.ui.session.ReplayTrackTab
 import com.rhazenz0.f1info.ui.session.RadioPlayer
 import com.rhazenz0.f1info.ui.session.SessionTabsView
 import com.rhazenz0.f1info.ui.session.TelemetryUi
@@ -83,13 +84,39 @@ class ScreenshotTest {
         assumeDataAvailable()
         val s = load()
         shoot(name, {
-            SessionTabsView(s.snapshot, isLive = false, radio = RadioPlayer(), telemetryTab = {
+            SessionTabsView(s.snapshot, isLive = false, radio = RadioPlayer(), trackTab = {
+                ReplayTrackTab(
+                    s.snapshot, TelemetryUi.Ready(loadTelemetry()), circuit(), onLoad = {},
+                    initialTimeMs = Instant.parse("2026-10-11T12:52:00Z").toEpochMilli(),
+                )
+            }, telemetryTab = {
                 ArchiveTelemetryTab(s.snapshot, TelemetryUi.Ready(loadTelemetry())) {}
             })
         }, click)
     }
 
+    private fun circuit() = File(feedDir, "circuit_61.json").takeIf { it.exists() }
+        ?.let { com.rhazenz0.f1info.data.timing.CircuitClient.parse(it.readText()) }
+
     @Test fun positions() = tabs(null, "01_positions")
+    @Test fun track() = tabs("Track", "01b_track")
+    @Test fun liveTrack() {
+        assumeDataAvailable()
+        val archive = archive()
+        val streams = listOf("Heartbeat", "SessionStatus", "TrackStatus", "TimingData").associateWith {
+            File(feedDir, "$it.jsonStream").takeIf { f -> f.exists() }?.readText()
+        }
+        val acc = com.rhazenz0.f1info.data.timing.SessionAccumulator()
+        archive.replay(acc, ref, streams, until = Instant.parse("2026-10-11T12:52:00Z"))
+        listOf("DriverList", "SessionInfo").forEach { t ->
+            File(feedDir, "$t.json").takeIf { it.exists() }?.let { acc.setKeyframe(t, com.rhazenz0.f1info.data.timing.FeedCodec.parseJson(it.readText())) }
+        }
+        val snap = acc.snapshot()
+        shoot("01c_live_track", {
+            com.rhazenz0.f1info.ui.session.LiveTrackTab(snap, circuit(), com.rhazenz0.f1info.ui.session.LiveTelemetry(), false)
+        })
+    }
+
     @Test fun laps() = tabs("Lap times", "02_laps")
     @Test fun telemetry() = tabs("Telemetry", "03_telemetry")
     @Test fun pits() = tabs("Pit stops", "04_pits")

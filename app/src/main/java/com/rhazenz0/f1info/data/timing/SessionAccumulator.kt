@@ -26,6 +26,7 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
     private val trackHistory = ArrayList<TrackStatusChange>()
     private val pitLaneEvents = LinkedHashMap<String, PitStopInfo>()
     private var lastUpdate: Instant? = null
+    private var lastReceivedMs: Long = 0L
 
     /** Topics the accumulator understands (CarData.z / Position.z are handled by telemetry code). */
     val topics: List<String> = TOPICS
@@ -36,7 +37,7 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
         val name = topic.removeSuffix(".z")
         val merged = FeedMerge.merge(state[name], patch)
         state[name] = merged
-        if (at != null) lastUpdate = at
+        if (at != null) { lastUpdate = at; lastReceivedMs = System.currentTimeMillis() }
 
         when (name) {
             "TimingData" -> lapBuilder.onLines(patch.at("Lines"), at)
@@ -53,7 +54,7 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
     fun applyInitial(topic: String, value: JsonElement, at: Instant?) {
         val name = topic.removeSuffix(".z")
         state[name] = value
-        if (at != null) lastUpdate = at
+        if (at != null) { lastUpdate = at; lastReceivedMs = System.currentTimeMillis() }
         when (name) {
             "TimingData" -> lapBuilder.prime(value.at("Lines"), at)
             "WeatherData" -> weather.add(weatherSample(value, at))
@@ -94,6 +95,7 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
         val info = state["SessionInfo"]
         val drivers = parseDrivers(state["DriverList"])
         val stints = parseStints(state["TimingAppData"])
+        val laps = lapBuilder.laps()
         return SessionSnapshot(
             sessionName = info.at("Name").text().orEmpty(),
             meetingName = info.at("Meeting", "Name").text().orEmpty(),
@@ -106,7 +108,7 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
             remaining = remaining(state["ExtrapolatedClock"], now),
             drivers = drivers,
             timing = parseTiming(state["TimingData"], state["TimingAppData"], stints),
-            laps = lapBuilder.laps(),
+            laps = laps,
             lapPositions = parseLapSeries(state["LapSeries"]),
             stints = stints,
             pitStops = parsePitStops(state["PitStopSeries"]).ifEmpty { pitLaneEvents.values.toList() },
@@ -118,7 +120,43 @@ class SessionAccumulator(private val staticBaseUrl: String = ArchiveClient.STATI
             trackStatusHistory = trackHistory.toList(),
             bestTimes = parseBestTimes(state["TimingStats"]),
             updatedAt = lastUpdate,
+            receivedAtMs = lastReceivedMs,
+            circuitKey = info.at("Meeting", "Circuit", "Key").int(),
+            year = (info.at("StartDate").text() ?: info.at("Path").text())?.take(4)?.toIntOrNull(),
+            lapProgress = parseLapProgress(state["TimingData"], laps),
         )
+    }
+
+    private fun parseLapProgress(timing: JsonElement?, laps: Map<String, List<LapRecord>>): Map<String, LapProgress> {
+        val sessionBest = laps.values.flatten().mapNotNull { it.lapTime }.minOrNull()
+        return timing.at("Lines").entries().associate { (number, line) ->
+            var total = 0
+            var passed = 0
+            var counting = true
+            for (sector in line.at("Sectors").elements()) {
+                for (seg in sector.at("Segments").elements()) {
+                    total++
+                    if (counting && (seg.at("Status").int() ?: 0) != 0) passed++ else counting = false
+                }
+            }
+            number to LapProgress(
+                driver = number,
+                lapStart = lapBuilder.currentLapStart(number),
+                segmentsPassed = passed,
+                segmentsTotal = total,
+                referenceLap = referenceLap(laps[number].orEmpty(), sessionBest),
+                inPit = line.at("InPit").bool() == true,
+                out = line.at("Retired").bool() == true || line.at("Stopped").bool() == true,
+            )
+        }
+    }
+
+    /** Recent representative lap time: the last clean lap unless it was unusually slow. */
+    private fun referenceLap(laps: List<LapRecord>, sessionBest: Double?): Double? {
+        val clean = laps.filter { it.lapTime != null && !it.pitInLap && !it.pitOutLap }
+        val best = clean.minOfOrNull { it.lapTime!! } ?: sessionBest ?: return null
+        val last = clean.lastOrNull()?.lapTime
+        return if (last != null && last <= best * 1.25) last else best * 1.03
     }
 
     private fun remaining(clock: JsonElement?, now: Instant): String? {

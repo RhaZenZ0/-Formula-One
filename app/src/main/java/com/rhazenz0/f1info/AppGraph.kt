@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import com.rhazenz0.f1info.data.jolpica.JolpicaClient
 import com.rhazenz0.f1info.data.net.Http
 import com.rhazenz0.f1info.data.timing.ArchiveClient
+import com.rhazenz0.f1info.data.timing.CircuitClient
 import com.rhazenz0.f1info.data.timing.LiveTimingClient
 import com.rhazenz0.f1info.data.timing.LoadedSession
 import com.rhazenz0.f1info.data.timing.MeetingRef
@@ -20,6 +21,7 @@ object AppGraph {
 
     val jolpica = JolpicaClient()
     val archive = ArchiveClient()
+    val circuits = CircuitClient()
     val live by lazy { LiveTimingClient(tokenProvider = { f1TvToken }) }
 
     fun init(context: Context) {

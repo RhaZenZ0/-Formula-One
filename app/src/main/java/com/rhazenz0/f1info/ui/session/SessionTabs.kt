@@ -49,6 +49,7 @@ import com.rhazenz0.f1info.ui.theme.TimingText
 
 enum class SessionTab(val title: String) {
     Positions("Positions"),
+    Track("Track"),
     Laps("Lap times"),
     Telemetry("Telemetry"),
     Pits("Pit stops"),
@@ -66,6 +67,7 @@ fun SessionTabsView(
     snapshot: SessionSnapshot,
     isLive: Boolean,
     radio: RadioPlayer,
+    trackTab: @Composable () -> Unit,
     telemetryTab: @Composable () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -92,6 +94,7 @@ fun SessionTabsView(
         }
         when (selected) {
             SessionTab.Positions -> PositionsTab(snapshot)
+            SessionTab.Track -> trackTab()
             SessionTab.Laps -> LapsTab(snapshot)
             SessionTab.Telemetry -> telemetryTab()
             SessionTab.Pits -> PitStopsTab(snapshot)

@@ -57,6 +57,7 @@ class ArchiveClient(
             val circuit = m.at("Circuit", "ShortName").text().orEmpty()
             val official = m.at("OfficialName").text().orEmpty()
             val key = m.at("Key").int() ?: 0
+            val circuitKey = m.at("Circuit", "Key").int()
             val sessions = m.at("Sessions").elements().mapNotNull { s ->
                 val path = s.at("Path").text() ?: return@mapNotNull null
                 val offset = s.at("GmtOffset").text().orEmpty()
@@ -75,6 +76,7 @@ class ArchiveClient(
                     end = TimeFormat.trackLocalToInstant(s.at("EndDate").text(), offset),
                     gmtOffset = offset,
                     path = path,
+                    circuitKey = circuitKey,
                 )
             }.sortedBy { it.start ?: Instant.MAX }
             MeetingRef(year, key, name, official, location, country, circuit, sessions)
@@ -115,7 +117,12 @@ class ArchiveClient(
     }
 
     /** Replays several streams in time order into [acc]. */
-    internal fun replay(acc: SessionAccumulator, ref: SessionRef, streamTexts: Map<String, String?>) {
+    internal fun replay(
+        acc: SessionAccumulator,
+        ref: SessionRef,
+        streamTexts: Map<String, String?>,
+        until: Instant? = null,
+    ) {
         val parsed = streamTexts.mapValues { (_, text) -> text?.let { FeedCodec.parseStream(it) }.orEmpty() }
         val baseTime = streamBaseTime(parsed["Heartbeat"].orEmpty()) ?: ref.start ?: Instant.EPOCH
 
@@ -126,6 +133,7 @@ class ArchiveClient(
         }
         events.sortBy { it.first }
         for ((offset, topic, payload) in events) {
+            if (until != null && baseTime.plusMillis(offset).isAfter(until)) break
             val json = runCatching { FeedCodec.parseJson(payload) }.getOrNull() ?: continue
             acc.apply(topic, json, baseTime.plusMillis(offset))
         }

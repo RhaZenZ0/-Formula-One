@@ -114,5 +114,8 @@ class LapHistoryBuilder {
         speeds.at("ST", "Value").textOrNull()?.toIntOrNull()?.let { cur.st = it }
     }
 
+    /** Server time at which [driver]'s current lap started, if known. */
+    fun currentLapStart(driver: String): Instant? = current[driver]?.start
+
     fun laps(): Map<String, List<LapRecord>> = laps.mapValues { (_, v) -> v.sortedBy { it.lap } }
 }
