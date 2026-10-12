@@ -61,8 +61,11 @@ class ScreenshotTest {
     private fun load(): LoadedSession = session ?: runBlocking { archive().loadSession(ref) }.also { session = it }
     private fun loadTelemetry(): TelemetryData = telemetry ?: runBlocking { archive().telemetry(ref) }.also { telemetry = it }
 
-    private fun shoot(name: String, content: @Composable () -> Unit, click: String? = null) {
+    private fun assumeDataAvailable() =
         assumeTrue(feedDir != null && outDir != null && File(feedDir, "TimingData.jsonStream").exists())
+
+    private fun shoot(name: String, content: @Composable () -> Unit, click: String? = null) {
+        assumeDataAvailable()
         compose.setContent {
             F1Theme { Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { content() } }
         }
@@ -76,6 +79,8 @@ class ScreenshotTest {
     }
 
     private fun tabs(click: String?, name: String) {
+        // Check before loading so the tests skip, rather than fail, when the archive files are absent.
+        assumeDataAvailable()
         val s = load()
         shoot(name, {
             SessionTabsView(s.snapshot, isLive = false, radio = RadioPlayer(), telemetryTab = {
