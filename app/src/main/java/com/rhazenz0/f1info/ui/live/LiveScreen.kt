@@ -43,6 +43,7 @@ import com.rhazenz0.f1info.ui.components.CenteredProgress
 import com.rhazenz0.f1info.ui.session.LiveCar
 import com.rhazenz0.f1info.ui.session.LiveTelemetry
 import com.rhazenz0.f1info.ui.session.LiveTelemetryTab
+import com.rhazenz0.f1info.ui.session.LiveTrackTab
 import com.rhazenz0.f1info.ui.session.RadioPlayer
 import com.rhazenz0.f1info.ui.session.SessionTabsView
 import com.rhazenz0.f1info.ui.theme.F1Colors
@@ -76,6 +77,11 @@ class LiveViewModel : ViewModel() {
     private val _telemetry = MutableStateFlow(LiveTelemetry())
     val telemetry: StateFlow<LiveTelemetry> = _telemetry
     val radio = RadioPlayer()
+    private val _outline = MutableStateFlow<com.rhazenz0.f1info.data.timing.TrackOutline?>(null)
+    val outline: StateFlow<com.rhazenz0.f1info.data.timing.TrackOutline?> = _outline
+    private val _outlineFailed = MutableStateFlow(false)
+    val outlineFailed: StateFlow<Boolean> = _outlineFailed
+    private var outlineKey: Int? = null
 
     private var accumulator = SessionAccumulator()
     private var dirty = false
@@ -178,6 +184,7 @@ class LiveViewModel : ViewModel() {
         if (dirty) {
             dirty = false
             _snapshot.value = accumulator.snapshot(Instant.now())
+            loadOutline(_snapshot.value)
         } else if (_snapshot.value != null) {
             // Keep the session clock ticking.
             _snapshot.value = _snapshot.value?.copy(remaining = accumulator.snapshot(Instant.now()).remaining)
@@ -185,6 +192,22 @@ class LiveViewModel : ViewModel() {
         if (telemetryDirty) {
             telemetryDirty = false
             _telemetry.value = LiveTelemetry(HashMap(cars), HashMap(positions), outlineX.toFloatArray(), outlineY.toFloatArray())
+        }
+    }
+
+    private fun loadOutline(s: SessionSnapshot?) {
+        val key = s?.circuitKey ?: return
+        if (key == outlineKey) return
+        outlineKey = key
+        _outline.value = null
+        _outlineFailed.value = false
+        viewModelScope.launch {
+            val outline = runCatching { AppGraph.circuits.outline(key, s.year ?: java.time.Year.now().value) }.getOrNull()
+            if (outlineKey == key) {
+                _outline.value = outline
+                _outlineFailed.value = outline == null
+                if (outline == null) outlineKey = null
+            }
         }
     }
 
@@ -199,6 +222,8 @@ fun LiveScreen(onOpenSettings: () -> Unit, vm: LiveViewModel = viewModel()) {
     val status by vm.status.collectAsStateWithLifecycle()
     val snapshot by vm.snapshot.collectAsStateWithLifecycle()
     val telemetry by vm.telemetry.collectAsStateWithLifecycle()
+    val outline by vm.outline.collectAsStateWithLifecycle()
+    val outlineFailed by vm.outlineFailed.collectAsStateWithLifecycle()
 
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -253,6 +278,7 @@ fun LiveScreen(onOpenSettings: () -> Unit, vm: LiveViewModel = viewModel()) {
             snapshot = snap,
             isLive = true,
             radio = vm.radio,
+            trackTab = { LiveTrackTab(snap, outline, telemetry, outlineFailed) },
             telemetryTab = { LiveTelemetryTab(snap, telemetry, vm.hasToken, onOpenSettings) },
         )
     }

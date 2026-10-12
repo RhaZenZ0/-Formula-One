@@ -13,8 +13,29 @@ android {
         applicationId = "com.rhazenz0.f1info"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI passes these from the release tag; local builds use the defaults.
+        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 2
+        versionName = (findProperty("versionName") as String?) ?: "1.1.0"
+    }
+
+    signingConfigs {
+        // A fixed debug key shared by every machine, so builds from GitHub can update each other.
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+        // Your own private key, supplied through environment variables (GitHub secrets on CI).
+        val releaseStore = System.getenv("F1INFO_KEYSTORE_FILE")
+        if (!releaseStore.isNullOrBlank() && file(releaseStore).exists()) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("F1INFO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("F1INFO_KEY_ALIAS")
+                keyPassword = System.getenv("F1INFO_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -22,9 +43,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so the release APK installs directly.
-            // Replace with your own signing config before publishing to Google Play.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 

@@ -19,6 +19,7 @@ data class SessionRef(
     val gmtOffset: String,
     /** Relative archive path, e.g. "2026/2026-10-11_Singapore_Grand_Prix/2026-10-11_Race/". */
     val path: String,
+    val circuitKey: Int? = null,
 ) {
     val isRace: Boolean get() = sessionType.equals("Race", ignoreCase = true)
     val isQualifying: Boolean get() = sessionType.equals("Qualifying", ignoreCase = true)
@@ -196,7 +197,16 @@ data class SessionSnapshot(
     val trackStatusHistory: List<TrackStatusChange> = emptyList(),
     val bestTimes: Map<String, BestTimes> = emptyMap(),
     val updatedAt: Instant? = null,
+    /** Device clock (epoch ms) when [updatedAt] was received; lets the UI advance server time smoothly. */
+    val receivedAtMs: Long = 0L,
+    val circuitKey: Int? = null,
+    val year: Int? = null,
+    val lapProgress: Map<String, LapProgress> = emptyMap(),
 ) {
+    /** Best guess of the timing server's clock right now. */
+    fun serverNow(nowMs: Long = System.currentTimeMillis()): Instant? =
+        updatedAt?.plusMillis((nowMs - receivedAtMs).coerceIn(0L, 60_000L))
+
     fun driver(number: String): DriverInfo? = drivers[number]
     fun tla(number: String): String = drivers[number]?.tla?.ifBlank { null } ?: "#$number"
 }

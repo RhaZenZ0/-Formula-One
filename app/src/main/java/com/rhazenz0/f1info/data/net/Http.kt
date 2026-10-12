@@ -95,7 +95,7 @@ object Http {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                cont.resume(response) { _ -> response.close() }
+                cont.resume(response) { _, value, _ -> value.close() }
             }
         })
         cont.invokeOnCancellation { runCatching { cancel() } }
