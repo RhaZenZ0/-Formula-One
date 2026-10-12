@@ -11,3 +11,4 @@
 *.apk
 *.aab
 !/gradle/wrapper/gradle-wrapper.jar
+.kotlin/
