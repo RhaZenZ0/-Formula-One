@@ -14,8 +14,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // CI passes these from the release tag; local builds use the defaults.
-        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 2
-        versionName = (findProperty("versionName") as String?) ?: "1.1.0"
+        versionCode = (findProperty("versionCode") as String?)?.toIntOrNull() ?: 3
+        versionName = (findProperty("versionName") as String?) ?: "1.2.0"
     }
 
     signingConfigs {
@@ -56,6 +56,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true

@@ -27,6 +27,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rhazenz0.f1info.data.update.AppUpdates
+import com.rhazenz0.f1info.data.update.UpdateManager
+import com.rhazenz0.f1info.data.update.UpdateState
+import com.rhazenz0.f1info.ui.components.UpdateCard
+import com.rhazenz0.f1info.util.TimeFormat
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -78,6 +89,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 }
                 if (saved) Text("Saved. Reopen the Live tab to reconnect.", color = MaterialTheme.colorScheme.primary)
             }
+            AppUpdatesSection()
             SectionCard("Data sources") {
                 Text(
                     "• Live timing, laps, telemetry, tyres, pit stops, team radio, weather, race control and " +
@@ -97,4 +109,60 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun AppUpdatesSection() {
+    val state by UpdateManager.state.collectAsStateWithLifecycle()
+    var auto by remember { mutableStateOf(UpdateManager.autoCheck) }
+    var autoInstall by remember { mutableStateOf(UpdateManager.autoInstall) }
+    val uri = LocalUriHandler.current
+    SectionCard("App updates") {
+        Text("F1 Info ${UpdateManager.currentVersion}", fontWeight = FontWeight.Bold)
+        Text(
+            when (val s = state) {
+                UpdateState.Checking -> "Checking GitHub Releases…"
+                is UpdateState.UpToDate -> "You have the latest version."
+                is UpdateState.Available -> "Version ${s.release.version} is available."
+                is UpdateState.Downloading -> "Downloading ${s.release.version}…"
+                is UpdateState.Installing -> "Waiting for you to confirm the install."
+                is UpdateState.Failed -> s.message
+                UpdateState.Idle -> UpdateManager.lastCheckMs.takeIf { it > 0 }?.let {
+                    "Last checked ${TimeFormat.localDate(java.time.Instant.ofEpochMilli(it))} ${TimeFormat.localTime(java.time.Instant.ofEpochMilli(it))}."
+                } ?: "Not checked yet."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state is UpdateState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = UpdateManager::check, enabled = state !is UpdateState.Checking && state !is UpdateState.Downloading) {
+                Text("Check for updates")
+            }
+            OutlinedButton(onClick = { uri.openUri(AppUpdates.RELEASES_PAGE) }) { Text("Releases page") }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Check every time the app opens", Modifier.weight(1f))
+            Switch(checked = auto, onCheckedChange = { auto = it; UpdateManager.autoCheck = it })
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Install updates automatically", Modifier.weight(1f), color = if (auto) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant)
+            Switch(checked = autoInstall, enabled = auto, onCheckedChange = { autoInstall = it; UpdateManager.autoInstall = it })
+        }
+        Text(
+            "Updates come from this app's GitHub Releases. When an update is found as the app opens, it is downloaded and checked, then installed. " +
+                "Android asks you to confirm the first time; on Android 12 and newer, later updates can install without asking. " +
+                "Turn off automatic install to be asked first instead.",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    UpdateCard(
+        state = state,
+        currentVersion = UpdateManager.currentVersion,
+        dismissedVersion = null,
+        onUpdate = UpdateManager::install,
+        onLater = UpdateManager::dismiss,
+        onCancel = UpdateManager::cancel,
+        showWhenDismissed = true,
+    )
 }
