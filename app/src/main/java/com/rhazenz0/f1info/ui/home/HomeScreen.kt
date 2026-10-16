@@ -44,6 +44,8 @@ import com.rhazenz0.f1info.data.jolpica.StandingsList
 import com.rhazenz0.f1info.ui.components.Loadable
 import com.rhazenz0.f1info.ui.components.LoadableContent
 import com.rhazenz0.f1info.ui.components.SectionCard
+import com.rhazenz0.f1info.ui.components.UpdateCard
+import com.rhazenz0.f1info.data.update.UpdateManager
 import com.rhazenz0.f1info.ui.components.userMessage
 import com.rhazenz0.f1info.ui.theme.F1Colors
 import com.rhazenz0.f1info.util.TimeFormat
@@ -95,6 +97,8 @@ fun HomeScreen(
     vm: HomeViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val update by UpdateManager.state.collectAsStateWithLifecycle()
+    val dismissed by UpdateManager.dismissedVersion.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text("F1 Info", fontWeight = FontWeight.Black) },
@@ -110,6 +114,16 @@ fun HomeScreen(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item {
+                    UpdateCard(
+                        state = update,
+                        currentVersion = UpdateManager.currentVersion,
+                        dismissedVersion = dismissed,
+                        onUpdate = UpdateManager::install,
+                        onLater = UpdateManager::dismiss,
+                        onCancel = UpdateManager::cancel,
+                    )
+                }
                 data.next?.let { next -> item { NextRaceCard(next, onOpenRace, onOpenLive) } }
                 data.lastRace?.let { race -> item { LastRaceCard(race, onOpenRace) } }
                 data.drivers?.let { list ->

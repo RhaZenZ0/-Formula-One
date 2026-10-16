@@ -10,8 +10,18 @@ It reads Formula 1's own live timing service directly, so there is no third-part
 
 Download the newest `F1-Info-x.y.z.apk` from the
 [Releases page](https://github.com/RhaZenZ0/-Formula-One/releases) on your Android phone and
-open it. Android asks you to allow installing apps from your browser the first time. Later
-releases install over the top as updates.
+open it. Android asks you to allow installing apps from your browser the first time.
+
+### Updates
+
+From version 1.2.0 the app updates itself. Each time it opens, it checks GitHub Releases. When
+there is a newer version it downloads it, checks the file against the SHA-256 that GitHub
+publishes, and installs it. Android asks you to confirm the first update; on Android 12 and
+newer, later updates can install without asking.
+
+In **Settings → App updates** you can check by hand, turn off the check on launch, or turn off
+automatic install so the app asks first. If an automatic install fails or you cancel it, that
+version is offered on the Home screen instead of being retried on every launch.
 
 ## Screenshots
 

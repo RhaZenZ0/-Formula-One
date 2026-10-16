@@ -8,7 +8,11 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rhazenz0.f1info.data.update.UpdateManager
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -59,6 +63,8 @@ fun F1InfoNavHost() {
     val nav = rememberNavController()
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
+
+    LaunchUpdateDialog()
 
     Scaffold(
         bottomBar = {
@@ -126,4 +132,25 @@ private fun NavHostController.navigateToTab(route: String) {
         launchSingleTop = true
         restoreState = true
     }
+}
+
+/** Asks about an update found at launch when automatic installs are turned off. */
+@Composable
+private fun LaunchUpdateDialog() {
+    val release by UpdateManager.launchPrompt.collectAsStateWithLifecycle()
+    val r = release ?: return
+    AlertDialog(
+        onDismissRequest = UpdateManager::clearLaunchPrompt,
+        title = { Text("Update to F1 Info ${r.version}?") },
+        text = {
+            Text(
+                "You have ${UpdateManager.currentVersion}. " +
+                    (r.notes.lineSequence().filter { it.startsWith("•") }.take(4).joinToString("\n").ifBlank { "A new version is ready." }),
+            )
+        },
+        confirmButton = { TextButton(onClick = { UpdateManager.install(r) }) { Text("Update now") } },
+        dismissButton = {
+            TextButton(onClick = { UpdateManager.dismiss(r); UpdateManager.clearLaunchPrompt() }) { Text("Later") }
+        },
+    )
 }
